@@ -1,0 +1,114 @@
+---
+title: "Practical Machine Learning Course Assignment"
+author: "Jill A Brown"
+date: "May 21, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## The Problem
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively.  One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. The participants included in the data set were asked to perform barbell lifts correctly and incorrectly in 5 different ways and the goal was to predict the manner in which they did the exercise using data from accelerometers on the belt, forearm, arm, and dumbbell of 6 participants.  
+
+```{r libraries, echo=FALSE, message=FALSE}
+library(dplyr)
+library(knitr)
+library(ggplot2)
+library(GGally)
+library(AppliedPredictiveModeling)
+library(caret)
+library(Hmisc)
+library(rpart)
+library(rpart.plot)
+```
+
+## Read Data
+First, we need to read in the data and clean it.  There are a number of columns with undefined variables and these will be removed.
+```{r readdata, echo=FALSE}
+activitydata <- read.csv("C:/Users/jilla/Google Drive/datasciencecoursera/machinelearning/pml-training.csv", header=TRUE, na.strings=c('','NA','#DIV/0!'))
+activitydata2 <- activitydata[ , colSums(is.na(activitydata)) == 0]
+dim(activitydata2)
+attach(activitydata2)
+```
+
+After the data are read in, we need to create a training and testing set.  Though there's a test set for the final part of the assignment, we still want to be able to get an out of sample error rate.  The current training set is 70% of the provided training set; the test set is 30%.
+```{r traintest}
+set.seed(1026)
+train = createDataPartition(y=activitydata2$classe, p=0.7, list=FALSE)
+trainact = activitydata2[train,]
+testact = activitydata2[-train,]
+trainact2 <- trainact[c(8:60)]
+testact2 <- testact[c(8:60)]
+dim(trainact2); dim(testact2)
+attach(trainact2)
+```
+
+## Explore Data
+We want to look at the variables and the general structure of the data.
+```{r explore, echo=FALSE}
+str(trainact2)
+head(trainact2)
+```
+
+
+## Build Model
+Two models will be built to try to predict the class of exercise that is being performed.  The models being tested are the partition and a random forest.
+``` {r buildpart, echo=FALSE}
+modelact <- train(classe ~ ., method="rpart", data=trainact2, na.action=na.omit)
+print(modelact$finalModel)
+plot(modelact$finalModel, uniform=TRUE, main="Classification Tree")
+text(modelact$finalModel, use.n=TRUE, all=TRUE, cex=.8)
+```
+``` {r buildrt, echo=FALSE}
+modelact2 <- train(classe ~ ., method="rf", data=trainact2)
+print(modelact2$finalModel)
+```
+
+
+
+## Cross Validation and Out of Sample Error
+In order to cross validate we try both our models on the test set that was set aside at the beginning of this exploration.  First we will analyze the partition model.
+``` {r testrpart}
+predictrpart <- predict(modelact, newdata=testact2, type="raw")
+matrixrpart <- confusionMatrix(predictrpart, testact2$classe)
+matrixrpart
+```
+This model demonstrates a low degree of accuracy.
+
+Now we will analyze the random forest model.
+``` {r testrt}
+predictrt <- predict(modelact2, newdata=testact2, type="raw")
+matrixrt <- confusionMatrix(predictrt, testact2$classe)
+matrixrt
+```
+This model demonstrates a high degree of accuracy.  Based on these cross validation activities and the out of sample error (accuracy value), it is recommended that a random forest model be used.
+
+``` {r imp, echo=FALSE}
+# estimate variable importance
+importance <- varImp(modelact2, scale=FALSE)
+plot(importance, main = "Top 5 Variables", top = 5)
+```
+The above plot shows the most important variables by rank in the random forest prediction model.
+
+
+## Final Test Data
+Now the random forest model will be used to predict the final twenty values.
+``` {r finaltest}
+activitydatatest <- read.csv("C:/Users/jilla/Google Drive/datasciencecoursera/machinelearning/pml-testing.csv", header=TRUE, na.strings=c('','NA','#DIV/0!'))
+activitydatatest2 <- activitydatatest[ , colSums(is.na(activitydatatest)) == 0]
+predictfinal <- predict(modelact2, newdata=activitydatatest2, type="raw")
+predictfinal
+
+```
+
+
+## Citation
+
+This dataset and corresponding information can be found here:
+
+Ugulino, W.; Cardador, D.; Vega, K.; Velloso, E.; Milidiu, R.; Fuks, H. Wearable Computing: Accelerometers' Data Classification of Body Postures and Movements. Proceedings of 21st Brazilian Symposium on Artificial Intelligence. Advances in Artificial Intelligence - SBIA 2012. In: Lecture Notes in Computer Science. , pp. 52-61. Curitiba, PR: Springer Berlin / Heidelberg, 2012. ISBN 978-3-642-34458-9. DOI: 10.1007/978-3-642-34459-6_6. 
+
+Read more: http://groupware.les.inf.puc-rio.br/har#ixzz4hikb2jJM
